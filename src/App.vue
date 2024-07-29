@@ -23,9 +23,9 @@ export default {
     // to not show footer in login, signup and forgot password pages
     checkRoute() {
       this.userNavBarHeader = true;
-      if(this.$route.name==="signup" || this.$route.name==="login" || this.$route.name==="forgot-password" || this.$route.name==="adminView" || this.$route.name==="studentAdmin" || this.$route.name==="teacherAdmin")
+      if(this.$route.name==="signup" || this.$route.name==="login" || this.$route.name==="forgot-password" || this.$route.name==="adminView" || this.$route.name==="studentAdmin" || this.$route.name==="teacherAdmin" ||this.$route.name==="studentView")
       {
-        if(this.$route.name==="adminView" || this.$route.name==="studentAdmin" || this.$route.name==="teacherAdmin")
+        if(this.$route.name==="adminView" || this.$route.name==="studentAdmin" || this.$route.name==="teacherAdmin" ||this.$route.name==="studentView")
         {
           this.userNavBarHeader = false;
         }

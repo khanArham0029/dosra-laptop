@@ -1,42 +1,43 @@
 <template>
-    <section class="container forms">
-      <div class="form login">
-        <div class="form-content">
-          <header>Login</header>
-          <form action="#">
-            <div class="field input-field">
-              <input type="email" placeholder="Email" class="input" v-model="email" />
-            </div>
-            <div class="field input-field">
-              <input type="password" placeholder="Password" class="password" v-model="password" />
-            </div>
-            <div class="field input-field">
-              <select v-model="userType" class="inputUserType">
-                <option value="" disabled>Select User Type</option>
-                <option value="student">Student</option>
-                <option value="teacher">Teacher</option>
-              </select>
-            </div>
-            <div class="form-link">
-              <router-link to="/forgotPassword" class="forgot-pass">Forgot password?</router-link>
-            </div>
-            <!-- error message is being displayed here -->
-            <div v-show="errorShow" class="error">{{ errorMsg }}</div>
-            <!-- error msg end -->
-            <div class="field button-field">
-              <button @click.prevent="login">Login</button>
-            </div>
-          </form>
-          <div class="form-link">
-            <span>
-              Don't have an account?
-              <router-link to="/signup" class="link signup-link">Signup</router-link>
-            </span>
+  <section class="container forms">
+    <div class="form login">
+      <div class="form-content">
+        <header>Login</header>
+        <form action="#">
+          <div class="field input-field">
+            <input type="email" placeholder="Email" class="input" v-model="email" />
           </div>
+          <div class="field input-field">
+            <input type="password" placeholder="Password" class="password" v-model="password" />
+          </div>
+          <div class="field input-field">
+            <select v-model="userType" class="inputUserType">
+              <option value="" disabled>Select User Type</option>
+              <option value="student">Student</option>
+              <option value="teacher">Teacher</option>
+              <option value="admin">Admin</option>
+            </select>
+          </div>
+          <div class="form-link">
+            <router-link to="/forgotPassword" class="forgot-pass">Forgot password?</router-link>
+          </div>
+          <!-- error message is being displayed here -->
+          <div v-show="errorShow" class="error">{{ errorMsg }}</div>
+          <!-- error msg end -->
+          <div class="field button-field">
+            <button @click.prevent="login">Login</button>
+          </div>
+        </form>
+        <div class="form-link">
+          <span>
+            Don't have an account?
+            <router-link to="/signup" class="link signup-link">Signup</router-link>
+          </span>
         </div>
       </div>
-    </section>
-  </template>
+    </div>
+  </section>
+</template>
 
 <script>
 import Swal from 'sweetalert2';
@@ -61,7 +62,21 @@ export default {
       if (this.email && this.password && this.userType) {
         try {
           // Check if the user's email exists in the respective collection
-          const collectionName = this.userType === 'teacher' ? 'teachers' : 'students';
+          let collectionName = '';
+          switch (this.userType) {
+            case 'teacher':
+              collectionName = 'teachers';
+              break;
+            case 'student':
+              collectionName = 'students';
+              break;
+            case 'admin':
+              collectionName = 'admins';
+              break;
+            default:
+              throw new Error('Invalid user type');
+          }
+
           const q = query(collection(db, collectionName), where("email", "==", this.email));
           const querySnapshot = await getDocs(q);
 
@@ -79,10 +94,16 @@ export default {
           });
 
           // Redirect based on user type
-          if (this.userType === 'teacher') {
-            this.$router.push('/teacherView');
-          } else if (this.userType === 'student') {
-            this.$router.push('/studentView');
+          switch (this.userType) {
+            case 'teacher':
+              this.$router.push('/teacherView');
+              break;
+            case 'student':
+              this.$router.push('/studentView');
+              break;
+            case 'admin':
+              this.$router.push('/adminView');
+              break;
           }
 
           this.errorShow = false;
@@ -106,6 +127,7 @@ export default {
   }
 };
 </script>
+
 <style scoped>
 @import "../assets/loginSignup.css";
 .error {

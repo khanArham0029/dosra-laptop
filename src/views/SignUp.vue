@@ -18,6 +18,7 @@
               <option value="" disabled>Select User Type</option>
               <option value="student">Student</option>
               <option value="teacher">Teacher</option>
+              <option value="admin">Admin</option>
             </select>
           </div>
           <!-- error message is being displayed here -->
@@ -58,34 +59,45 @@ export default {
     };
   },
   methods: {
-    signup() {
+    async signup() {
       if (this.username && this.email && this.password && this.userType) {
-        // Signing up the user
-        createUserWithEmailAndPassword(auth, this.email, this.password)
-          .then((userCredential) => {
-            // Signed in 
-            const user = userCredential.user;
-            console.log(user);
-            this.errorShow = false;
-            this.errorMsg = "";
+        try {
+          // Signing up the user
+          const userCredential = await createUserWithEmailAndPassword(auth, this.email, this.password);
+          const user = userCredential.user;
+          console.log(user);
+          this.errorShow = false;
+          this.errorMsg = "";
 
-            // Determine the collection based on userType
-            const collectionName = this.userType === 'teacher' ? 'teachers' : 'students';
+          // Determine the collection based on userType
+          let collectionName;
+          switch (this.userType) {
+            case 'teacher':
+              collectionName = 'teachers';
+              break;
+            case 'student':
+              collectionName = 'students';
+              break;
+            case 'admin':
+              collectionName = 'admins';
+              break;
+            default:
+              throw new Error('Invalid user type');
+          }
 
-            // Data to send
-            const dataObj = {
-              userName: this.username,
-              email: this.email,
-            };
+          // Data to send
+          const dataObj = {
+            userName: this.username,
+            email: this.email,
+          };
 
-            // Create document in the respective collection
-            addDoc(collection(db, collectionName), dataObj);
-          })
-          .catch((error) => {
-            this.errorMsg = error.message;
-            this.errorShow = true;
-            console.log(error.message);
-          });
+          // Create document in the respective collection
+          await addDoc(collection(db, collectionName), dataObj);
+        } catch (error) {
+          this.errorMsg = error.message;
+          this.errorShow = true;
+          console.log(error.message);
+        }
       } else {
         this.errorShow = true;
         this.errorMsg = "Please fill all the fields";
@@ -94,6 +106,7 @@ export default {
   }
 };
 </script>
+
 <style scoped>
 @import "../assets/loginSignup.css";
 .form {

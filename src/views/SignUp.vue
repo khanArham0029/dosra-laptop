@@ -14,7 +14,7 @@
             <input type="password" placeholder="Password" class="password" v-model="password" />
           </div>
           <div class="field input-field">
-            <select v-model="userType" class="input">
+            <select v-model="userType" class="inputUserType">
               <option value="" disabled>Select User Type</option>
               <option value="student">Student</option>
               <option value="teacher">Teacher</option>
@@ -104,5 +104,12 @@ export default {
   font-size: 14px;
   margin-top: 10px;
   text-align: center;
+}
+.inputUserType {
+  width: 100%;
+  padding: 10px;
+  border-radius: 5px;
+  border: 1px solid #ccc;
+  margin-top: 10px;
 }
 </style>

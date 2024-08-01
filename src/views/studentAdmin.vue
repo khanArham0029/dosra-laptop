@@ -3,30 +3,25 @@
   <section class="home-section">
     <nav>
       <div class="sidebar-button">
-        <!-- <i class='bx bx-menu sidebarBtn'></i> -->
         <span class="dashboard">Student</span>
       </div>
       <div class="search-box">
         <input type="text" placeholder="Search..." v-model="searchQuery" />
-        <!-- <i class='bx bx-search' ></i> -->
       </div>
       <div class="profile-details">
-        <!-- <img src="images/profile.jpg" alt=""> -->
         <span class="admin_name">Mahad</span>
-        <!-- <i class='bx bx-chevron-down' ></i> -->
       </div>
     </nav>
     <div class="home-content">
       <div class="overview-boxes">
         <div class="box">
           <div class="right-side">
-          <!-- Add User Button -->
-          <div class="add-user-button-container">
-            <button class="addUserButton" @click="showAddForm">Add User</button>
+            <div class="add-user-button-container">
+              <button class="addUserButton" @click="showAddForm">Add User</button>
+            </div>
+            <div class="number">Total Students: {{ totalStudents }}</div>
           </div>
-          <div class="number">Total Students: {{ totalStudents }}</div>
         </div>
-      </div>
       </div>
       <div class="sales-boxes">
         <div class="recent-sales box">
@@ -54,7 +49,7 @@
               <li class="topic">Actions</li>
               <li v-for="student in filteredStudents" :key="student.id">
                 <button class="actionButton" @click="showUpdateForm(student)">Update</button>
-                <button class="actionButton" @click="deleteStudent(student.id)">Delete</button>
+                <button class="actionButton" @click="confirmDeleteStudent(student.id)">Delete</button>
               </li>
             </ul>
           </div>
@@ -67,7 +62,7 @@
       <div class="form modal-content">
         <span class="close" @click="isUpdateFormVisible = false">&times;</span>
         <h2 class="form-title">Update Student</h2>
-        <form @submit.prevent="updateStudent">
+        <form @submit.prevent="performUpdateStudent">
           <div class="input-container ic1">
             <input type="text" class="input" v-model="updateFormData.name" required />
             <div class="cut"></div>
@@ -88,7 +83,7 @@
       <div class="form modal-content">
         <span class="close" @click="isAddFormVisible = false">&times;</span>
         <h2 class="form-title">Add Student</h2>
-        <form @submit.prevent="addStudent">
+        <form @submit.prevent="performAddStudent">
           <div class="input-container ic1">
             <input type="text" class="input" v-model="newStudentData.name" required />
             <div class="cut"></div>
@@ -112,109 +107,109 @@
 </template>
 
 <script>
-import { doc, getDocs, collection, deleteDoc, updateDoc, addDoc } from 'firebase/firestore'
-import db from '../firebase.js'
-import sideBarAdmin from '../components/sideBarAdmin.vue'
-import Swal from 'sweetalert2'
+import { ref, computed, onMounted } from 'vue';
+import { useStore } from 'vuex';
+import Swal from 'sweetalert2';
+import sideBarAdmin from '../components/sideBarAdmin.vue';
+import { interpret } from 'xstate';
+import { appMachine } from '../state/eduMachine';
 
 export default {
   name: 'adminView',
   components: {
-    sideBarAdmin
+    sideBarAdmin,
   },
-  data() {
+  setup() {
+    const store = useStore();
+    const searchQuery = ref('');
+    const isUpdateFormVisible = ref(false);
+    const isAddFormVisible = ref(false);
+    const updateFormData = ref({ id: '', name: '', email: '' });
+    const newStudentData = ref({ name: '', email: '', enrolled: '' });
+
+    const studentService = interpret(appMachine)
+      .onTransition((state) => {
+        if (state.matches('studentsFetched')) {
+          console.log('Students fetched successfully');
+        } else if (state.matches('studentAdded')) {
+          Swal.fire('Success', 'Student added successfully', 'success');
+        } else if (state.matches('studentUpdated')) {
+          Swal.fire('Success', 'Student updated successfully', 'success');
+        } else if (state.matches('studentDeleted')) {
+          Swal.fire('Success', 'Student deleted successfully', 'success');
+        } else if (state.matches('error')) {
+          Swal.fire('Error', state.context.error || 'An error occurred', 'error');
+        }
+      })
+      .start();
+
+    const filteredStudents = computed(() => {
+      if (!searchQuery.value) {
+        return store.state.students;
+      }
+      return store.state.students.filter(student =>
+        student.name.toLowerCase().includes(searchQuery.value.toLowerCase())
+      );
+    });
+
+    const totalStudents = computed(() => store.state.students.length);
+
+    const showUpdateForm = (student) => {
+      updateFormData.value = { ...student };
+      isUpdateFormVisible.value = true;
+    };
+
+    const showAddForm = () => {
+      newStudentData.value = { name: '', email: '', enrolled: '' };
+      isAddFormVisible.value = true;
+    };
+
+    const performUpdateStudent = () => {
+      studentService.send('UPDATE_STUDENT', { data: updateFormData.value });
+      isUpdateFormVisible.value = false;
+    };
+
+    const performAddStudent = () => {
+      studentService.send('CREATE_STUDENT', { data: newStudentData.value });
+      isAddFormVisible.value = false;
+    };
+
+    const confirmDeleteStudent = (studentId) => {
+      Swal.fire({
+        title: 'Are you sure?',
+        text: "You won't be able to revert this!",
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#3085d6',
+        cancelButtonColor: '#d33',
+        confirmButtonText: 'Yes, delete it!'
+      }).then((result) => {
+        if (result.isConfirmed) {
+          studentService.send('DELETE_STUDENT', { data: studentId });
+        }
+      });
+    };
+
+    onMounted(() => {
+      studentService.send('FETCH_STUDENTS');
+    });
+
     return {
-      students: [],
-      searchQuery: '',
-      isUpdateFormVisible: false,
-      isAddFormVisible: false,
-      updateFormData: {
-        id: '',
-        name: '',
-        email: ''
-      },
-      newStudentData: {
-        name: '',
-        email: '',
-        enrolled: ''
-      }
-    }
-  },
-  created() {
-    this.fetchStudents()
-  },
-  methods: {
-    async fetchStudents() {
-      try {
-        const querySnapshot = await getDocs(collection(db, 'students'))
-        this.students = querySnapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data()
-        }))
-      } catch (error) {
-        console.error('Error fetching students: ', error)
-      }
-    },
-    async deleteStudent(studentId) {
-      try {
-        await deleteDoc(doc(db, 'students', studentId))
-        this.students = this.students.filter((student) => student.id !== studentId)
-        Swal.fire({
-          title: 'Record Deleted Succesfully'
-        })
-      } catch (error) {
-        console.error('Error deleting student: ', error)
-      }
-    },
-    showUpdateForm(student) {
-      this.updateFormData = { ...student }
-      this.isUpdateFormVisible = true
-    },
-    async updateStudent() {
-      try {
-        const studentRef = doc(db, 'students', this.updateFormData.id)
-        await updateDoc(studentRef, {
-          name: this.updateFormData.name,
-          email: this.updateFormData.email
-        })
-        this.students = this.students.map((student) =>
-          student.id === this.updateFormData.id
-            ? { ...student, name: this.updateFormData.name, email: this.updateFormData.email }
-            : student
-        )
-        this.isUpdateFormVisible = false
-      } catch (error) {
-        console.error('Error updating student: ', error)
-      }
-    },
-    showAddForm() {
-      this.newStudentData = { name: '', email: '', enrolled: '' }
-      this.isAddFormVisible = true
-    },
-    async addStudent() {
-      try {
-        await addDoc(collection(db, 'students'), this.newStudentData)
-        this.students.push({ ...this.newStudentData, id: new Date().getTime().toString() })
-        this.isAddFormVisible = false
-      } catch (error) {
-        console.error('Error adding student: ', error)
-      }
-    }
-  },
-  computed: {
-    filteredStudents() {
-      if (!this.searchQuery) {
-        return this.students
-      }
-      return this.students.filter((student) =>
-        student.name.toLowerCase().includes(this.searchQuery.toLowerCase())
-      )
-    },
-    totalStudents() {
-      return this.students.length
-    }
+      searchQuery,
+      isUpdateFormVisible,
+      isAddFormVisible,
+      updateFormData,
+      newStudentData,
+      filteredStudents,
+      totalStudents,
+      showUpdateForm,
+      showAddForm,
+      performUpdateStudent,
+      performAddStudent,
+      confirmDeleteStudent
+    };
   }
-}
+};
 </script>
 
 <style scoped>

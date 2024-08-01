@@ -28,31 +28,45 @@
 </template>
 
 <script>
-import { collection, getDocs } from 'firebase/firestore';
-import db from '../firebase.js';
+import { ref, computed, onMounted } from 'vue';
+import { useStore } from 'vuex';
+import { interpret } from 'xstate';
+import { appMachine } from '../state/eduMachine';
+import Swal from 'sweetalert2';
 
 export default {
-  data() {
+  name: 'StudentView',
+  setup() {
+    const store = useStore();
+    const searchQuery = ref('');
+    const courseService = interpret(appMachine)
+      .onTransition((state) => {
+        if (state.matches('coursesFetched')) {
+          console.log('Courses fetched successfully');
+        } else if (state.matches('error')) {
+          Swal.fire('Error', state.context.error || 'An error occurred', 'error');
+        }
+      })
+      .start();
+
+    const filteredCourses = computed(() => {
+      if (!searchQuery.value) {
+        return store.state.courses;
+      }
+      return store.state.courses.filter(course =>
+        course.name.toLowerCase().includes(searchQuery.value.toLowerCase())
+      );
+    });
+
+    onMounted(() => {
+      courseService.send('FETCH_COURSES');
+    });
+
     return {
-      searchQuery: '',
-      courses: []
+      searchQuery,
+      filteredCourses,
     };
   },
-  computed: {
-    filteredCourses() {
-      return this.courses.filter(course =>
-        course.name && course.name.toLowerCase().includes(this.searchQuery.toLowerCase())
-      );
-    }
-  },
-  async mounted() {
-    try {
-      const querySnapshot = await getDocs(collection(db, 'courses'));
-      this.courses = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-    } catch (error) {
-      console.error('Failed to fetch courses:', error);
-    }
-  }
 };
 </script>
 

@@ -1,51 +1,59 @@
 <template>
-    <div v-if="loading">
-      <p>Loading...</p>
-    </div>
-    <div v-else>
-      <h1>{{ course.name }}</h1>
-      <img :src="course.imageUrl || 'images/default-course.jpg'" alt="Course Image">
-      <p>{{ course.description }}</p>
-      <p>Instructor: {{ course.instructor }}</p>
-    </div>
-  </template>
-  
-  <script>
-  import { doc, getDoc } from 'firebase/firestore';
-  import db from '../firebase.js';
-  
-  export default {
-    props: {
-      id: {
-        type: String,
-        required: true
-      }
-    },
-    data() {
-      return {
-        course: null,
-        loading: true,
-      };
-    },
-    async mounted() {
-      try {
-        const docRef = doc(db, 'courses', this.id);
-        const docSnap = await getDoc(docRef);
-        if (docSnap.exists()) {
-          this.course = docSnap.data();
-        } else {
-          console.log('No such document!');
-        }
-      } catch (error) {
-        console.error('Failed to fetch course details:', error);
-      } finally {
-        this.loading = false;
-      }
+  <div v-if="loading">
+    <p>Loading...</p>
+  </div>
+  <div v-else>
+    <h1>{{ course.name }}</h1>
+    <img :src="course.imageUrl || 'images/default-course.jpg'" alt="Course Image">
+    <p>{{ course.description }}</p>
+    <p>Instructor: {{ course.instructor }}</p>
+  </div>
+</template>
+
+<script>
+import { ref, computed, onMounted } from 'vue';
+import { useStore } from 'vuex';
+import { interpret } from 'xstate';
+import { appMachine } from '../state/eduMachine';
+
+export default {
+  props: {
+    id: {
+      type: String,
+      required: true
     }
-  };
-  </script>
-  
-  <style scoped>
-  /* Add styles here if necessary */
-  </style>
-  
+  },
+  setup(props) {
+    const loading = ref(true);
+    const store = useStore();
+    const service = interpret(appMachine)
+      .onTransition((state) => {
+        if (state.matches('authenticated')) {
+          loading.value = false;
+        }
+      })
+      .start();
+
+    const course = computed(() => {
+      return store.state.courses.find(course => course.id === props.id) || {};
+    });
+
+    onMounted(() => {
+      if (!course.value.name) {
+        service.send('FETCH_COURSES');
+      } else {
+        loading.value = false;
+      }
+    });
+
+    return {
+      loading,
+      course
+    };
+  }
+};
+</script>
+
+<style scoped>
+/* Add styles here if necessary */
+</style>

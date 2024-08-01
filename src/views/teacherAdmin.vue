@@ -3,37 +3,26 @@
   <section class="home-section">
     <nav>
       <div class="sidebar-button">
-        <!-- <i class='bx bx-menu sidebarBtn'></i> -->
         <span class="dashboard">Teacher</span>
       </div>
       <div class="search-box">
         <input type="text" placeholder="Search..." v-model="searchQuery" />
-        <!-- <i class='bx bx-search' ></i> -->
       </div>
       <div class="profile-details">
-        <!-- <img src="images/profile.jpg" alt=""> -->
         <span class="admin_name">Mahad</span>
-        <!-- <i class='bx bx-chevron-down' ></i> -->
       </div>
     </nav>
     <div class="home-content">
       <div class="overview-boxes">
         <div class="box">
           <div class="right-side">
-            <!-- add teacher button -->
             <div class="add-user-button-container">
-              <button class="addUserButton" @click="isAddFormVisible = true">Add Teacher</button>
+              <button class="addUserButton" @click="showAddForm">Add Teacher</button>
             </div>
             <div class="number">Total Teachers: {{ totalTeachers }}</div>
-            <div class="indicator">
-              <!-- <i class='bx bx-up-arrow-alt'></i> -->
-              <!-- <span class="text">Up from yesterday</span> -->
-            </div>
           </div>
-          <!-- <i class='bx bx-cart-alt cart'></i> -->
         </div>
       </div>
-
       <div class="sales-boxes">
         <div class="recent-sales box">
           <div class="title">All Teachers</div>
@@ -60,12 +49,9 @@
               <li class="topic">Actions</li>
               <li v-for="teacher in filteredTeachers" :key="teacher.id">
                 <button class="actionButton" @click="showUpdateForm(teacher)">Update</button>
-                <button class="actionButton" @click="deleteTeacher(teacher.id)">Delete</button>
+                <button class="actionButton" @click="performDeleteTeacher(teacher.id)">Delete</button>
               </li>
             </ul>
-          </div>
-          <div class="button">
-            <a href="#">See All</a>
           </div>
         </div>
       </div>
@@ -76,7 +62,7 @@
       <div class="form modal-content">
         <span class="close" @click="isAddFormVisible = false">&times;</span>
         <h2 class="form-title">Add Teacher</h2>
-        <form @submit.prevent="addTeacher">
+        <form @submit.prevent="performAddTeacher">
           <div class="input-container ic1">
             <input type="text" class="input" v-model="addFormData.name" required />
             <div class="cut"></div>
@@ -107,7 +93,7 @@
       <div class="form modal-content">
         <span class="close" @click="isUpdateFormVisible = false">&times;</span>
         <h2 class="form-title">Update Teacher</h2>
-        <form @submit.prevent="updateTeacher">
+        <form @submit.prevent="performUpdateTeacher">
           <div class="input-container ic1">
             <input type="text" class="input" v-model="updateFormData.name" required />
             <div class="cut"></div>
@@ -131,127 +117,104 @@
 </template>
 
 <script>
-import { doc, getDocs, collection, deleteDoc, updateDoc, addDoc } from 'firebase/firestore'
-import db from '../firebase.js'
-import sideBarAdmin from '../components/sideBarAdmin.vue'
+import { ref, computed, onMounted } from 'vue';
+import { useStore } from 'vuex';
+import { interpret } from 'xstate';
+import { appMachine } from '../state/eduMachine';
+import Swal from 'sweetalert2';
+import sideBarAdmin from '../components/sideBarAdmin.vue';
 
 export default {
-  name: 'adminView',
+  name: 'AdminView',
   components: {
-    sideBarAdmin
+    sideBarAdmin,
   },
-  data() {
-    return {
-      teachers: [],
-      searchQuery: '',
-      isAddFormVisible: false,
-      isUpdateFormVisible: false,
-      addFormData: {
-        name: '',
-        email: '',
-        age: '',
-        subjects: ''
-      },
-      updateFormData: {
-        id: '',
-        name: '',
-        email: '',
-        subjects: ''
-      }
-    }
-  },
-  created() {
-    this.fetchTeachers()
-  },
-  methods: {
-    async fetchTeachers() {
-      try {
-        const querySnapshot = await getDocs(collection(db, 'teachers'))
-        this.teachers = querySnapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data()
-        }))
-      } catch (error) {
-        console.error('Error fetching teachers: ', error)
-      }
-    },
-    async addTeacher() {
-      try {
-        const docRef = await addDoc(collection(db, 'teachers'), {
-          name: this.addFormData.name,
-          email: this.addFormData.email,
-          age: this.addFormData.age,
-          subjects: this.addFormData.subjects
-        })
-        this.teachers.push({
-          id: docRef.id,
-          ...this.addFormData
-        })
-        this.isAddFormVisible = false
-        this.addFormData = {
-          name: '',
-          email: '',
-          age: '',
-          subjects: ''
+  setup() {
+    const store = useStore();
+    const searchQuery = ref('');
+    const isAddFormVisible = ref(false);
+    const isUpdateFormVisible = ref(false);
+    const addFormData = ref({ name: '', email: '', age: '', subjects: '' });
+    const updateFormData = ref({ id: '', name: '', email: '', subjects: '' });
+
+    const teacherService = interpret(appMachine)
+      .onTransition((state) => {
+        if (state.matches('teachersFetched')) {
+          store.commit('setTeachers', state.context.teachers);
+        } else if (state.matches('teacherAdded')) {
+          Swal.fire('Success', 'Teacher added successfully', 'success');
+          teacherService.send('FETCH_TEACHERS'); // Refresh list after adding
+        } else if (state.matches('teacherUpdated')) {
+          Swal.fire('Success', 'Teacher updated successfully', 'success');
+          teacherService.send('FETCH_TEACHERS'); // Refresh list after updating
+        } else if (state.matches('teacherDeleted')) {
+          Swal.fire('Success', 'Teacher deleted successfully', 'success');
+          teacherService.send('FETCH_TEACHERS'); // Refresh list after deleting
+        } else if (state.matches('error')) {
+          Swal.fire('Error', state.context.error || 'An error occurred', 'error');
         }
-      } catch (error) {
-        console.error('Error adding teacher: ', error)
-      }
-    },
-    async deleteTeacher(teacherId) {
-      try {
-        await deleteDoc(doc(db, 'teachers', teacherId))
-        this.teachers = this.teachers.filter((teacher) => teacher.id !== teacherId)
-      } catch (error) {
-        console.error('Error deleting teacher: ', error)
-      }
-    },
-    showUpdateForm(teacher) {
-      this.updateFormData = { ...teacher }
-      this.isUpdateFormVisible = true
-    },
-    async updateTeacher() {
-      try {
-        const teacherRef = doc(db, 'teachers', this.updateFormData.id)
-        await updateDoc(teacherRef, {
-          name: this.updateFormData.name,
-          email: this.updateFormData.email,
-          subjects: this.updateFormData.subjects
-        })
-        this.teachers = this.teachers.map((teacher) =>
-          teacher.id === this.updateFormData.id
-            ? {
-                ...teacher,
-                name: this.updateFormData.name,
-                email: this.updateFormData.email,
-                subjects: this.updateFormData.subjects
-              }
-            : teacher
-        )
-        this.isUpdateFormVisible = false
-      } catch (error) {
-        console.error('Error updating teacher: ', error)
-      }
-    }
+      })
+      .start();
+
+    const filteredTeachers = computed(() => {
+      if (!searchQuery.value) return store.state.teachers;
+      return store.state.teachers.filter(teacher =>
+        teacher.name.toLowerCase().includes(searchQuery.value.toLowerCase())
+      );
+    });
+
+    const totalTeachers = computed(() => store.state.teachers.length);
+
+    const performAddTeacher = () => {
+      teacherService.send({ type: 'ADD_TEACHER', data: addFormData.value });
+      isAddFormVisible.value = false;
+    };
+
+    const performUpdateTeacher = () => {
+      teacherService.send({ type: 'UPDATE_TEACHER', data: updateFormData.value });
+      isUpdateFormVisible.value = false;
+    };
+
+    const performDeleteTeacher = (id) => {
+      teacherService.send({ type: 'DELETE_TEACHER', id });
+    };
+
+    const showAddForm = () => {
+      addFormData.value = { name: '', email: '', age: '', subjects: '' };
+      isAddFormVisible.value = true;
+    };
+
+    const showUpdateForm = (teacher) => {
+      updateFormData.value = { ...teacher };
+      isUpdateFormVisible.value = true;
+    };
+
+    onMounted(() => {
+      teacherService.send('FETCH_TEACHERS');
+    });
+
+    return {
+      searchQuery,
+      isAddFormVisible,
+      isUpdateFormVisible,
+      addFormData,
+      updateFormData,
+      filteredTeachers,
+      totalTeachers,
+      performAddTeacher,
+      performUpdateTeacher,
+      performDeleteTeacher,
+      showAddForm,
+      showUpdateForm,
+    };
   },
-  computed: {
-    filteredTeachers() {
-      if (!this.searchQuery) {
-        return this.teachers
-      }
-      return this.teachers.filter((teacher) =>
-        teacher.name.toLowerCase().includes(this.searchQuery.toLowerCase())
-      )
-    },
-    totalTeachers() {
-      return this.teachers.length
-    }
-  }
-}
+};
 </script>
 
 <style scoped>
 @import '../assets/adminPage.css';
+
+/* Your existing styles */
 
 .add-user-button-container {
   margin: 20px 0;
@@ -401,7 +364,7 @@ export default {
   font-size: 28px;
   font-weight: bold;
   cursor: pointer;
-  color: #fff; /* Initial color set to white */
+  color: #fff;
 }
 
 .close:hover,

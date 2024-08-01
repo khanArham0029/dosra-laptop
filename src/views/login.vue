@@ -3,7 +3,7 @@
     <div class="form login">
       <div class="form-content">
         <header>Login</header>
-        <form action="#">
+        <form @submit.prevent="performLogin">
           <div class="field input-field">
             <input type="email" placeholder="Email" class="input" v-model="email" />
           </div>
@@ -21,11 +21,9 @@
           <div class="form-link">
             <router-link to="/forgotPassword" class="forgot-pass">Forgot password?</router-link>
           </div>
-          <!-- error message is being displayed here -->
-          <div v-show="errorShow" class="error">{{ errorMsg }}</div>
-          <!-- error msg end -->
+          <div v-show="errorMsg" class="error">{{ errorMsg }}</div>
           <div class="field button-field">
-            <button @click.prevent="login">Login</button>
+            <button type="submit">Login</button>
           </div>
         </form>
         <div class="form-link">
@@ -40,91 +38,67 @@
 </template>
 
 <script>
+import { ref } from 'vue';
+import { useRouter } from 'vue-router';
 import Swal from 'sweetalert2';
-import { signInWithEmailAndPassword } from 'firebase/auth';
-import { auth } from '../firebase.js';
-import { collection, getDocs, query, where } from 'firebase/firestore'; 
-import db from '../firebase.js';
+import { interpret } from 'xstate';
+import { appMachine } from '../state/eduMachine'; // Adjust the import path
 
-export default { 
-  name: 'LogIN',
-  data() {
-    return {
-      email: '',
-      password: '',
-      userType: '', // Add userType to the data model
-      errorMsg: '',
-      errorShow: false
-    };
-  },
-  methods: {
-    async login() {
-      if (this.email && this.password && this.userType) {
-        try {
-          // Check if the user's email exists in the respective collection
-          let collectionName = '';
-          switch (this.userType) {
+export default {
+  name: 'LoginPage',
+  setup() {
+    const email = ref('');
+    const password = ref('');
+    const userType = ref('');
+    const errorMsg = ref('');
+    const router = useRouter();
+    const service = interpret(appMachine)
+      .onTransition((state) => {
+        console.log('Current state:', state.value);
+        console.log('Context:', state.context);
+        if (state.matches('authenticated')) {
+          Swal.fire('Success', 'Login successful', 'success');
+          const currentUser = state.context.user;
+          console.log(currentUser.userType);
+          switch (currentUser.userType) {
+            case 'admin':
+              router.push('/adminView');
+              break;
             case 'teacher':
-              collectionName = 'teachers';
+              router.push('/teacherView');
               break;
             case 'student':
-              collectionName = 'students';
-              break;
-            case 'admin':
-              collectionName = 'admins';
+              router.push('/studentView');
               break;
             default:
-              throw new Error('Invalid user type');
+              console.log(currentUser.userType);
+              router.push('/adminView'); // Default route or handle unexpected userType
           }
-
-          const q = query(collection(db, collectionName), where("email", "==", this.email));
-          const querySnapshot = await getDocs(q);
-
-          if (querySnapshot.empty) {
-            throw new Error('User not found in the selected user type');
-          }
-
-          // Proceed with Firebase authentication
-          await signInWithEmailAndPassword(auth, this.email, this.password);
-          Swal.fire({
-            icon: 'success',
-            title: 'Login Successful',
-            showConfirmButton: false,
-            timer: 1500
-          });
-
-          // Redirect based on user type
-          switch (this.userType) {
-            case 'teacher':
-              this.$router.push('/teacherView');
-              break;
-            case 'student':
-              this.$router.push('/studentView');
-              break;
-            case 'admin':
-              this.$router.push('/adminView');
-              break;
-          }
-
-          this.errorShow = false;
-          this.errorMsg = "";
-          console.log(auth.currentUser.uid);
-        } catch (error) {
-          Swal.fire({
-            icon: 'error',
-            title: 'Oops...',
-            text: error.message || 'Invalid email or password',
-          });
-          this.errorShow = true;
-          this.errorMsg = error.message || 'Invalid email or password';
-          console.log(error.message);
+        } else if (state.matches('error')) {
+          errorMsg.value = state.context.error || 'Login failed';
+          Swal.fire('Error', errorMsg.value, 'error');
         }
+      })
+      .start();
+
+    const performLogin = () => {
+      errorMsg.value = ''; // Clear the error message before attempting login
+      if (email.value && password.value && userType.value) {
+        service.send({ type: 'LOGIN', data: { email: email.value, password: password.value, userType: userType.value } });
       } else {
-        this.errorShow = true;
-        this.errorMsg = "Please fill all the fields";
+        errorMsg.value = 'Please fill all the fields';
+        Swal.fire('Error', errorMsg.value, 'error');
       }
-    }
-  }
+    };
+
+    return {
+      email,
+      password,
+      userType,
+      errorMsg,
+      performLogin,
+    };
+  },
 };
 </script>
 
